@@ -257,7 +257,7 @@ static OSStatus OutputRenderCallback(void* inRefCon, AudioUnitRenderActionFlags*
     BOOL fileFinishedEarly = NO;
     
     if (STKQueueMixerStateBuffering == player.mixerState) {
-        if ((framesPlayed + used) < player->_framesToContinueAfterBuffer) {
+        if ((framesPlayed + used) <= player->_framesToContinueAfterBuffer) {
             
             bufferIsReady = NO;
         }
@@ -342,7 +342,7 @@ static OSStatus OutputRenderCallback(void* inRefCon, AudioUnitRenderActionFlags*
         player->_framesToContinueAfterBuffer = framesPlayed + k_framesRequiredToPlay;
         
         memset(ioData->mBuffers[0].mData, 0, ioData->mBuffers[0].mDataByteSize);
-        return error;
+        return AudioUnitSetParameter(player->_mixerUnit, kMultiChannelMixerParam_Volume, kAudioUnitScope_Input, inBusNumber, 0, 0);
     }
     
     OSSpinLockLock(&entryForBus->spinLock);
