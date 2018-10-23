@@ -38,10 +38,6 @@
 @interface STKHTTPDataSource()
 {
 @private
-    BOOL supportsSeek;
-    UInt32 httpStatusCode;
-    SInt64 seekStart;
-    SInt64 relativePosition;
     SInt64 fileLength;
     int discontinuous;
 	int requestSerialNumber;
@@ -441,11 +437,6 @@
     seekStart = offset;
     
     self->isInErrorState = NO;
-    
-    if (0 < seekStart && 0 == httpStatusCode) {
-        requestedStartOffset = seekStart;
-        seekStart = 0;
-    }
     
     if (!self->supportsSeek && seekStart != self->relativePosition)
     {
