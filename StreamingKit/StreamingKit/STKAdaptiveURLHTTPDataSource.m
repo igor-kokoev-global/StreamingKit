@@ -46,4 +46,36 @@
     self->asyncUrlProvider = [asyncProvider copy];
 }
 
+-(void) seekToOffset:(SInt64)offset
+{
+    NSRunLoop* savedEventsRunLoop = eventsRunLoop;
+    
+    [self close];
+    
+    eventsRunLoop = savedEventsRunLoop;
+    
+    if ([NSRunLoop currentRunLoop] != eventsRunLoop) {
+        return;
+    }
+    
+    stream = 0;
+    relativePosition = 0;
+    seekStart = offset;
+    
+    self->isInErrorState = NO;
+    
+    if (0 < seekStart && 0 == httpStatusCode) {
+        requestedStartOffset = seekStart;
+        seekStart = 0;
+    }
+    
+    if (!self->supportsSeek && seekStart != self->relativePosition)
+    {
+        return;
+    }
+    
+    [self openForSeek:YES];
+}
+
+
 @end

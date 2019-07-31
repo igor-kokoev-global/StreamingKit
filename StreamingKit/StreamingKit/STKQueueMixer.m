@@ -365,8 +365,15 @@ static OSStatus OutputRenderCallback(void* inRefCon, AudioUnitRenderActionFlags*
             player.mixerState = STKQueueMixerStatePlaying;
         }
     }
-    
-    if (newFramesPlayed == newLastFrameQueued) {
+
+    SInt64 framesPlayedForCurrent = totalFramesCopied;
+    if (entryForBus->lastFrameQueued >= 0)
+    {
+        framesPlayedForCurrent = MIN(entryForBus->lastFrameQueued - entryForBus->framesPlayed, framesPlayedForCurrent);
+    }
+    SInt64 totalFramesPlayed = entryForBus->framesPlayed + framesPlayedForCurrent;
+    BOOL lastFramePlayed = totalFramesPlayed == entryForBus->lastFrameQueued;
+    if (lastFramePlayed) {
         [player trackEntry:entryForBus finishedPlayingOnBus:inBusNumber];
     }
     
