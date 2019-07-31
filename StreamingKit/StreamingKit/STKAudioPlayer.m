@@ -1460,7 +1460,7 @@ static void AudioFileStreamPacketsProc(void* clientData, UInt32 numberBytes, UIn
         
         if (!error && !(ioFlags & kAudioFileStreamSeekFlag_OffsetIsEstimated))
         {
-            double delta = ((seekByteOffset - (SInt64)currentEntry->audioDataOffset) - packetAlignedByteOffset) / calculatedBitRate * 8;
+            double delta = ((seekByteOffset - (SInt64)currentEntry->audioDataOffset) - packetAlignedByteOffset) / (calculatedBitRate * 8);
             
             OSSpinLockLock(&currentEntry->spinLock);
             currentEntry->seekTime -= delta;
