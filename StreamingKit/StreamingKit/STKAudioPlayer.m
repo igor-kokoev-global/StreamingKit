@@ -244,6 +244,9 @@ static AudioStreamBasicDescription canonicalAudioStreamBasicDescription;
     volatile BOOL disposeWasRequested;
     volatile BOOL seekToTimeWasRequested;
     volatile STKAudioPlayerStopReason stopReason;
+    
+    BOOL formatListUpdated;
+    BOOL pendingDataFormatUpdate;
 }
 
 @property (readwrite) STKAudioPlayerInternalState internalState;
@@ -810,53 +813,11 @@ static void AudioFileStreamPacketsProc(void* clientData, UInt32 numberBytes, UIn
         }
         case kAudioFileStreamProperty_DataFormat:
         {
-            AudioStreamBasicDescription newBasicDescription;
-            STKQueueEntry* entryToUpdate = currentlyReadingEntry;
-
-            if (!currentlyReadingEntry->parsedHeader)
-            {
-                UInt32 size = sizeof(newBasicDescription);
-                
-                AudioFileStreamGetProperty(inAudioFileStream, kAudioFileStreamProperty_DataFormat, &size, &newBasicDescription);
-
-                pthread_mutex_lock(&playerMutex);
-                
-                if (entryToUpdate->audioStreamBasicDescription.mFormatID == 0)
-                {
-                    entryToUpdate->audioStreamBasicDescription = newBasicDescription;
-                }
-                
-                entryToUpdate->sampleRate = entryToUpdate->audioStreamBasicDescription.mSampleRate;
-                entryToUpdate->packetDuration = entryToUpdate->audioStreamBasicDescription.mFramesPerPacket / entryToUpdate->sampleRate;
-
-                UInt32 packetBufferSize = 0;
-                UInt32 sizeOfPacketBufferSize = sizeof(packetBufferSize);
-                
-                error = AudioFileStreamGetProperty(audioFileStream, kAudioFileStreamProperty_PacketSizeUpperBound, &sizeOfPacketBufferSize, &packetBufferSize);
-                
-                if (error || packetBufferSize == 0)
-                {
-                    error = AudioFileStreamGetProperty(audioFileStream, kAudioFileStreamProperty_MaximumPacketSize, &sizeOfPacketBufferSize, &packetBufferSize);
-                    
-                    if (error || packetBufferSize == 0)
-                    {
-                        entryToUpdate->packetBufferSize = STK_DEFAULT_PACKET_BUFFER_SIZE;
-                    }
-                    else
-                    {
-                        entryToUpdate->packetBufferSize = packetBufferSize;
-                    }
-                }
-                else
-                {
-                    entryToUpdate->packetBufferSize = packetBufferSize;
-                }
-                
-                [self createAudioConverter:&currentlyReadingEntry->audioStreamBasicDescription];
-                
-                pthread_mutex_unlock(&playerMutex);
+            if (formatListUpdated) {
+                [self handleDataFormatUpdate:inAudioFileStream error:&error];
+            } else {
+                pendingDataFormatUpdate = YES;
             }
-            
             break;
         }
         case kAudioFileStreamProperty_AudioDataByteCount:
@@ -914,9 +875,65 @@ static void AudioFileStreamPacketsProc(void* clientData, UInt32 numberBytes, UIn
             
             free(formatList);
             
+            formatListUpdated = YES;
+            if (pendingDataFormatUpdate) {
+                pendingDataFormatUpdate = NO;
+                [self handleDataFormatUpdate:inAudioFileStream error:&error];
+            }
+
             break;
         }
         
+    }
+}
+
+- (void)handleDataFormatUpdate:(AudioFileStreamID)fileStreamID error:(OSStatus*)error {
+    
+    AudioStreamBasicDescription newBasicDescription;
+    STKQueueEntry* entryToUpdate = currentlyReadingEntry;
+    
+    if (!currentlyReadingEntry->parsedHeader)
+    {
+        UInt32 size = sizeof(newBasicDescription);
+        
+        AudioFileStreamGetProperty(fileStreamID, kAudioFileStreamProperty_DataFormat, &size, &newBasicDescription);
+        
+        pthread_mutex_lock(&playerMutex);
+        
+        if (entryToUpdate->audioStreamBasicDescription.mFormatID == 0)
+        {
+            entryToUpdate->audioStreamBasicDescription = newBasicDescription;
+        }
+        
+        entryToUpdate->sampleRate = entryToUpdate->audioStreamBasicDescription.mSampleRate;
+        entryToUpdate->packetDuration = entryToUpdate->audioStreamBasicDescription.mFramesPerPacket / entryToUpdate->sampleRate;
+        
+        UInt32 packetBufferSize = 0;
+        UInt32 sizeOfPacketBufferSize = sizeof(packetBufferSize);
+        
+        error = AudioFileStreamGetProperty(audioFileStream, kAudioFileStreamProperty_PacketSizeUpperBound, &sizeOfPacketBufferSize, &packetBufferSize);
+        
+        if (error || packetBufferSize == 0)
+        {
+            error = AudioFileStreamGetProperty(audioFileStream, kAudioFileStreamProperty_MaximumPacketSize, &sizeOfPacketBufferSize, &packetBufferSize);
+            
+            if (error || packetBufferSize == 0)
+            {
+                entryToUpdate->packetBufferSize = STK_DEFAULT_PACKET_BUFFER_SIZE;
+            }
+            else
+            {
+                entryToUpdate->packetBufferSize = packetBufferSize;
+            }
+        }
+        else
+        {
+            entryToUpdate->packetBufferSize = packetBufferSize;
+        }
+        
+        [self createAudioConverter:&currentlyReadingEntry->audioStreamBasicDescription];
+        
+        pthread_mutex_unlock(&playerMutex);
     }
 }
 
@@ -1911,7 +1928,10 @@ static BOOL GetHardwareCodecClassDesc(UInt32 formatId, AudioClassDescription* cl
 
     audioConverterAudioStreamBasicDescription = *asbd;
     
-    if (self->currentlyReadingEntry.dataSource.audioFileTypeHint != kAudioFileAAC_ADTSType)
+    BOOL additionnalCheckNeeded = (self->currentlyReadingEntry.dataSource.audioFileTypeHint != kAudioFileAAC_ADTSType)
+    && (self->currentlyReadingEntry.dataSource.audioFileTypeHint != kAudioFileM4AType)
+    && (self->currentlyReadingEntry.dataSource.audioFileTypeHint != kAudioFileMPEG4Type);
+    if (additionnalCheckNeeded)
     {
         status = AudioFileStreamGetPropertyInfo(audioFileStream, kAudioFileStreamProperty_MagicCookieData, &cookieSize, &writable);
     
