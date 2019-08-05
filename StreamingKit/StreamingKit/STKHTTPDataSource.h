@@ -44,6 +44,10 @@ typedef void(^STKAsyncURLProvider)(STKHTTPDataSource* dataSource, BOOL forSeek, 
     @protected
         SInt64 requestedStartOffset;
         STKAsyncURLProvider asyncUrlProvider;
+        SInt64 relativePosition;
+        SInt64 seekStart;
+        UInt32 httpStatusCode;
+        BOOL supportsSeek;
 }
 
 @property (readonly, retain) NSURL* url;
@@ -56,5 +60,6 @@ typedef void(^STKAsyncURLProvider)(STKHTTPDataSource* dataSource, BOOL forSeek, 
 -(id) initWithAsyncURLProvider:(STKAsyncURLProvider)asyncUrlProvider;
 -(NSRunLoop*) eventsRunLoop;
 -(void) reconnect;
+-(void) openForSeek:(BOOL)forSeek;
 
 @end
