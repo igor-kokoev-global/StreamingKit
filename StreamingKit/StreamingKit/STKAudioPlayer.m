@@ -244,6 +244,9 @@ static AudioStreamBasicDescription canonicalAudioStreamBasicDescription;
     volatile BOOL disposeWasRequested;
     volatile BOOL seekToTimeWasRequested;
     volatile STKAudioPlayerStopReason stopReason;
+    
+    char lastFileFormat[4];
+    char *fileFormatM4A;
 }
 
 @property (readwrite) STKAudioPlayerInternalState internalState;
@@ -493,6 +496,8 @@ static void AudioFileStreamPacketsProc(void* clientData, UInt32 numberBytes, UIn
         
         upcomingQueue = [[NSMutableArray alloc] init];
         bufferingQueue = [[NSMutableArray alloc] init];
+        
+        fileFormatM4A = "fa4m";
 
 		[self resetPcmBuffers];
         [self createAudioGraph];
@@ -801,10 +806,9 @@ static void AudioFileStreamPacketsProc(void* clientData, UInt32 numberBytes, UIn
         }
         case kAudioFileStreamProperty_FileFormat:
         {
-            char fileFormat[4];
-			UInt32 fileFormatSize = sizeof(fileFormat);
+			UInt32 fileFormatSize = sizeof(lastFileFormat);
             
-			AudioFileStreamGetProperty(inAudioFileStream, kAudioFileStreamProperty_FileFormat, &fileFormatSize, &fileFormat);
+			AudioFileStreamGetProperty(inAudioFileStream, kAudioFileStreamProperty_FileFormat, &fileFormatSize, &lastFileFormat);
             
             break;
         }
@@ -852,7 +856,9 @@ static void AudioFileStreamPacketsProc(void* clientData, UInt32 numberBytes, UIn
                     entryToUpdate->packetBufferSize = packetBufferSize;
                 }
                 
-                [self createAudioConverter:&currentlyReadingEntry->audioStreamBasicDescription];
+                if (strcmp(fileFormatM4A, lastFileFormat) != 0) {
+                    [self createAudioConverter:&currentlyReadingEntry->audioStreamBasicDescription];
+                }
                 
                 pthread_mutex_unlock(&playerMutex);
             }
@@ -881,57 +887,49 @@ static void AudioFileStreamPacketsProc(void* clientData, UInt32 numberBytes, UIn
         }
         case kAudioFileStreamProperty_FormatList:
         {
+            Boolean outWriteable;
+            UInt32 formatListSize;
+            OSStatus err = AudioFileStreamGetPropertyInfo(inAudioFileStream, kAudioFileStreamProperty_FormatList, &formatListSize, &outWriteable);
+            
+            if (err)
+            {
+                break;
+            }
+            
+            AudioFormatListItem* formatList = malloc(formatListSize);
+            
+            err = AudioFileStreamGetProperty(inAudioFileStream, kAudioFileStreamProperty_FormatList, &formatListSize, formatList);
+            
+            if (err)
+            {
+                free(formatList);
+                break;
+            }
+            
+            for (int i = 0; i * sizeof(AudioFormatListItem) < formatListSize; i += sizeof(AudioFormatListItem))
+            {
+                AudioStreamBasicDescription pasbd = formatList[i].mASBD;
+                
+                if (pasbd.mFormatID == kAudioFormatMPEG4AAC_HE || pasbd.mFormatID == kAudioFormatMPEG4AAC_HE_V2)
+                {
+                    currentlyReadingEntry->audioStreamBasicDescription = pasbd;
 
-            AudioFormatListItem afli = GetFirstPlayableAudioFormatForFile(inAudioFileStream);
-            currentlyReadingEntry->audioStreamBasicDescription = afli.mASBD;
-                    
+                    break;
+                }
+            }
+            
+            free(formatList);
+            
+            if (strcmp(fileFormatM4A, lastFileFormat) == 0) {
+                pthread_mutex_lock(&playerMutex);
+                [self createAudioConverter:&currentlyReadingEntry->audioStreamBasicDescription];
+                pthread_mutex_unlock(&playerMutex);
+            }
+            
             break;
         }
         
     }
-}
-
-AudioFormatListItem GetFirstPlayableAudioFormatForFile(AudioFileStreamID inFileID) {
-    AudioFormatListItem *formatListPtr = NULL;
-    AudioFormatListItem formatItem = {0};
-    UInt32 propertySize;
-
-    OSStatus status = noErr;
-
-    if (NULL == inFileID) return formatItem;
-
-    status = AudioFileStreamGetPropertyInfo(inFileID, kAudioFilePropertyFormatList, &propertySize, NULL);
-    if (noErr == status) {
-
-        // allocate memory for the format list items
-        formatListPtr = (AudioFormatListItem *)malloc(propertySize);
-        if (NULL == formatListPtr) return formatItem;
-
-        // get the list of Audio Format List Item's
-        status = AudioFileStreamGetProperty(inFileID, kAudioFilePropertyFormatList, &propertySize, formatListPtr);
-        if (noErr == status) {
-            // print out some helpful information
-            UInt32 numFormats = propertySize / sizeof(AudioFormatListItem);
-            printf ("This file has a %d layered data format:\n", numFormats);
-
-            UInt32 itemIndex;
-            UInt32 indexSize = sizeof(itemIndex);
-
-            // get the index number of the first playable format -- this index number will be for
-            // the highest quality layer the platform is capable of playing
-            status = AudioFormatGetProperty(kAudioFormatProperty_FirstPlayableFormatFromList, propertySize,
-                                            formatListPtr, &indexSize, &itemIndex);
-            if (noErr == status) {
-                printf ("Returning AudioFormatListItem at index %d.\n", itemIndex);
-                // copy the format item at index we want returned
-                formatItem =  formatListPtr[itemIndex];
-            }
-        }
-
-        free(formatListPtr);
-    }
-
-    return formatItem;
 }
 
 -(Float64) currentTimeInFrames
@@ -1473,7 +1471,7 @@ AudioFormatListItem GetFirstPlayableAudioFormatForFile(AudioFileStreamID inFileI
         error = AudioFileStreamSeek(audioFileStream, seekPacket, &packetAlignedByteOffset, &ioFlags);
         
         if (!error && !(ioFlags & kAudioFileStreamSeekFlag_OffsetIsEstimated))
-        {            
+        {
             seekByteOffset = packetAlignedByteOffset + currentEntry->audioDataOffset;
         }
     }
@@ -1919,7 +1917,10 @@ static BOOL GetHardwareCodecClassDesc(UInt32 formatId, AudioClassDescription* cl
 
     audioConverterAudioStreamBasicDescription = *asbd;
     
-    if (self->currentlyReadingEntry.dataSource.audioFileTypeHint != kAudioFileAAC_ADTSType)
+    BOOL additionnalCheckNeeded = (self->currentlyReadingEntry.dataSource.audioFileTypeHint != kAudioFileAAC_ADTSType)
+    && (self->currentlyReadingEntry.dataSource.audioFileTypeHint != kAudioFileM4AType)
+    && (self->currentlyReadingEntry.dataSource.audioFileTypeHint != kAudioFileMPEG4Type);
+    if (additionnalCheckNeeded)
     {
         status = AudioFileStreamGetPropertyInfo(audioFileStream, kAudioFileStreamProperty_MagicCookieData, &cookieSize, &writable);
     
@@ -3170,4 +3171,3 @@ static OSStatus OutputRenderCallback(void* inRefCon, AudioUnitRenderActionFlags*
 }
 
 @end
-
