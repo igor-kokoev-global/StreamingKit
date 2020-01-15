@@ -856,6 +856,8 @@ static void AudioFileStreamPacketsProc(void* clientData, UInt32 numberBytes, UIn
                     entryToUpdate->packetBufferSize = packetBufferSize;
                 }
                 
+                // Delay createAudioConverter when the format is .m4a because DataFormat update happens before FormatList
+                // In that case the creation will happen in FormatList update
                 if (strcmp(fileFormatM4A, lastFileFormat) != 0) {
                     [self createAudioConverter:&currentlyReadingEntry->audioStreamBasicDescription];
                 }
@@ -920,6 +922,7 @@ static void AudioFileStreamPacketsProc(void* clientData, UInt32 numberBytes, UIn
             
             free(formatList);
             
+            // Calling createAudioConverter here when format is .m4a as it was delayed from DataFormat update
             if (strcmp(fileFormatM4A, lastFileFormat) == 0) {
                 pthread_mutex_lock(&playerMutex);
                 [self createAudioConverter:&currentlyReadingEntry->audioStreamBasicDescription];
