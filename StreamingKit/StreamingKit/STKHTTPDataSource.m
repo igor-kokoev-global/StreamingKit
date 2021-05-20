@@ -205,9 +205,11 @@
 
 -(BOOL) parseHttpHeader
 {
+    NSURL *redirectUrl = nil;
     if (!httpHeaderNotAvailable)
     {
         CFTypeRef response = CFReadStreamCopyProperty(stream, kCFStreamPropertyHTTPResponseHeader);
+        redirectUrl = (__bridge_transfer NSURL*)CFReadStreamCopyProperty(stream, kCFStreamPropertyHTTPFinalURL);
         
         if (response)
         {
@@ -354,6 +356,14 @@
         [self errorOccured];
         
         return NO;
+    }
+    
+    if (redirectUrl) {
+        STKURLProvider urlProvider = ^NSURL* { return redirectUrl; };
+        self->asyncUrlProvider = ^(STKHTTPDataSource* dataSource, BOOL forSeek, STKURLBlock block)
+        {
+            block(urlProvider());
+        };
     }
     
     return YES;
