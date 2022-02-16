@@ -67,7 +67,7 @@
     
     if (audioPacketCount > 0.0)
     {
-        return audioPacketCount * packetDuration;;
+        return audioPacketCount * packetDuration;
     }
     
     UInt64 audioDataLengthInBytes = [self audioDataLengthInBytes];
