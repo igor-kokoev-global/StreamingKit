@@ -869,6 +869,17 @@ static void AudioFileStreamPacketsProc(void* clientData, UInt32 numberBytes, UIn
             
             break;
         }
+        case kAudioFileStreamProperty_AudioDataPacketCount:
+        {
+            UInt64 audioDataPacketCount;
+            UInt32 byteCountSize = sizeof(audioDataPacketCount);
+            
+            AudioFileStreamGetProperty(inAudioFileStream, kAudioFileStreamProperty_AudioDataPacketCount, &byteCountSize, &audioDataPacketCount);
+            
+            currentlyReadingEntry->audioPacketCount = audioDataPacketCount;
+            
+            break;
+        }
         case kAudioFileStreamProperty_AudioDataByteCount:
         {
             UInt64 audioDataByteCount;
