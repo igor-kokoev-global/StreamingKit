@@ -45,7 +45,7 @@
 	{
 		if (processedPacketsCount > STK_BIT_RATE_ESTIMATION_MIN_PACKETS_PREFERRED || (audioStreamBasicDescription.mBytesPerFrame == 0 && processedPacketsCount > STK_BIT_RATE_ESTIMATION_MIN_PACKETS_MIN))
 		{
-			double averagePacketByteSize = processedPacketsSizeTotal / processedPacketsCount;
+			double averagePacketByteSize = (double)processedPacketsSizeTotal / (double)processedPacketsCount;
 			
 			retval = averagePacketByteSize / packetDuration * 8;
 			
@@ -63,6 +63,11 @@
     if (self->sampleRate <= 0)
     {
         return 0;
+    }
+    
+    if (audioPacketCount > 0.0)
+    {
+        return audioPacketCount * packetDuration;
     }
     
     UInt64 audioDataLengthInBytes = [self audioDataLengthInBytes];

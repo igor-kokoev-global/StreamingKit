@@ -20,6 +20,7 @@
     double packetDuration;
     UInt64 audioDataOffset;
     UInt64 audioDataByteCount;
+    UInt64 audioPacketCount;
     UInt32 packetBufferSize;
     volatile Float64 seekTime;
     volatile SInt64 framesQueued;
