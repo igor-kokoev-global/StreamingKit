@@ -2815,6 +2815,8 @@ static OSStatus OutputRenderCallback(void* inRefCon, AudioUnitRenderActionFlags*
        
         if (lastFramePlayed && entry == currentlyPlayingEntry)
         {
+            [audioPlayer stopAudioUnitWithReason:STKAudioPlayerStopReasonEof];
+            
             [audioPlayer audioQueueFinishedPlaying:entry];
             
             while (extraFramesPlayedNotAssigned > 0)
