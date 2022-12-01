@@ -5,7 +5,7 @@ Pod::Spec.new do |s|
   s.homepage     = "https://github.com/tumtumtum/StreamingKit/"
   s.license      = 'MIT'
   s.author       = { "Thong Nguyen" => "tumtumtum@gmail.com" }
-  s.source       = { :git => "https://github.com/GlobalRadio/StreamingKit.git", :tag => "guac_2.4.24"}
+  s.source       = { :git => "https://github.com/GlobalRadio/StreamingKit.git", :tag => "guac_#{s.version}"}
   s.platform     = :ios
   s.requires_arc = true
   s.source_files = 'StreamingKit/StreamingKit/*.{h,m}'
