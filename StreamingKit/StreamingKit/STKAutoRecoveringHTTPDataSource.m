@@ -46,6 +46,8 @@
 #define DEFAULT_WATCHDOG_PERIOD_SECONDS (8)
 #define DEFAULT_INACTIVE_PERIOD_BEFORE_RECONNECT_SECONDS (15)
 
+static const uint HTTP_RESPONSE_NOT_RECEIVED = 0;
+
 static uint64_t GetTickCount(void)
 {
     static mach_timebase_info_data_t sTimebaseInfo;
@@ -372,7 +374,7 @@ static void PopulateOptionsWithDefault(STKAutoRecoveringHTTPDataSourceOptions* o
 -(void) dataSourceErrorOccured:(STKDataSource*)dataSource
 {
     const UInt32 httpStatusCode = self.innerDataSource.httpStatusCode;
-    const bool isRetryableStatus = httpStatusCode >= 200 && httpStatusCode < 300;
+    const bool isRetryableStatus = (httpStatusCode >= 200 && httpStatusCode < 300) || httpStatusCode == HTTP_RESPONSE_NOT_RECEIVED;
     
     NSLog(@"Error on source %@ with http status %@ – will %@.", dataSource, @(httpStatusCode), isRetryableStatus ? @"retry" : @"fail");
     
